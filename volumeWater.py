@@ -12,7 +12,7 @@ class VolumeWater:
 
     """
     На вход: сколько ml хотят забрать
-    Выход: сколько может дать
+    Выход: сколько даen
     """
     def giveWater(self, needVolume: int):
         if self.__curVolume - needVolume < 0:
@@ -28,9 +28,11 @@ class VolumeWater:
     Выход: текущий объем
     """
     def takeWater(self, takeVolume: int):
-        self.__curVolume += takeVolume
-        if self.__curVolume > _VOLUME_MAX:
+        temp = self.__curVolume + takeVolume
+        if temp > _VOLUME_MAX:
             self.__curVolume = _VOLUME_MAX
+        else:
+            self.__curVolume = temp
         return self.__curVolume
     
     """

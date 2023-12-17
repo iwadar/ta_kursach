@@ -81,3 +81,19 @@ class State:
             self.stateCheckSystem()
             self.currentState = StateEnum.Wait
         return curHumidity
+
+
+    def stateWait(self, nowState: StateEnum):
+        if nowState == StateEnum.Watering:
+            self.stateWatering()
+        self.stateCheckSystem()
+        self.currentState = StateEnum.Wait
+        print('Current state: {}'.format(self.currentState.name))
+        curHumidity = self.humidity.checkLevelHumedity(time)
+        if curHumidity < _HUMIDITY_LEVEL_LOW or self.timing.checkTimeToWatering(time):
+            self.stateWatering()
+            self.currentState = StateEnum.CheckSystem
+            self.stateCheckSystem()
+            self.currentState = StateEnum.Wait
+        return curHumidity
+        
