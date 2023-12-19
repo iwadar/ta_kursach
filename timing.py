@@ -10,10 +10,10 @@ class Timing:
     Вход: текущее время в секундах
     Выход: если совпадает время текущее со временем в расписании, то true
     """
-    def checkTimeToWatering(self, curTime):
+    def checkTimeToWatering(self, curTime, isDone):
         for time in self.__timing.keys():
             if curTime - time < _TIME_FAULT and curTime - time > 0 and not self.__timing[time]:
-                self.__timing[time] = True
+                self.__timing[time] = isDone
                 return True
         return False
     

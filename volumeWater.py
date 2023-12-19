@@ -1,4 +1,4 @@
-_VOLUME_MAX = 1000
+_VOLUME_MAX = 2000
 _VOLUME_MIN = 0
 _VOLUME_MIDDLE = 500
 _VOLUME_HIGH = 700
@@ -43,7 +43,3 @@ class VolumeWater:
     
     def getCurrentVolume(self):
         return self.__curVolume
-    
-
-v = VolumeWater()
-print(v.howVolumeNeedToMax())

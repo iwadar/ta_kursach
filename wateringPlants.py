@@ -1,21 +1,18 @@
 import arcade
 import arcade.gui
 from datetime import timedelta
-# from state import *
 
 from humidity import *
 from volumeWater import *
 from timing import *
 from error import *
 from enum import Enum
-from time import sleep
-from threading import Thread
 
 
 _VOLUME_LOW = 100
+_VOLUME_MIN = 0
 _HUMIDITY_LEVEL_LOW = 30
 _HUMIDITY_LEVEL_OPTIMAL = 70
-_VOLUME_MIN = 0
 _HUMIDITY_LEVEL_MAX = 100
 
 
@@ -42,30 +39,31 @@ _VOLUME_HIGH = 700
 class WateringPlantWindow(arcade.Window):    
 
     currentState = None
-    humidity = None
+    humidity = []
     volume = None
     timing = None  
     error = None
     isHappened = False
     isClickWatering = False
-    durationWatering = 0
     isAddNoWaterButton = False
     isAddErrorButton = False
     paddingNoWater = None
     paddingError = None
 
     def __init__(self):
-        self.total_time = 35820.0
+        self.total_time = 35880.0
         self.prev_time = self.total_time
-        self.humidity = Humidity(self.total_time)
-        self.volume = VolumeWater(100)
+        self.humidity.append(Humidity(self.total_time, curHumedity=20, seconds=60))
+        self.humidity.append(Humidity(self.total_time, seconds=10))
+        self.durationWatering = [0.0] * len(self.humidity)
+        self.volume = VolumeWater(1000)
         self.timing = Timing()
         self.errorState = Error()
         self.currentState = StateEnum.Off
         self.prevState = self.currentState
         super().__init__(width=SCREEN_WIDTH, height=SCREEN_HEIGHT, title='Watering Plants')
         arcade.set_background_color(arcade.color.ANTIQUE_WHITE)
-        self.ground = arcade.create_rectangle_filled(center_x=SCREEN_WIDTH/2.5, center_y=SCREEN_HEIGHT/1.7, width=800, height=450, color=arcade.color.GUPPIE_GREEN)
+        self.ground = arcade.create_rectangle_filled(center_x=SCREEN_WIDTH/2.5, center_y=SCREEN_HEIGHT/1.7, width=800, height=450, color=arcade.color.IVORY)
 
         ################# BUTTOM ##############################
         self.managerNeedButton = arcade.gui.UIManager()
@@ -76,47 +74,21 @@ class WateringPlantWindow(arcade.Window):
         self.g_box.add(self.on_buttom.with_space_around(bottom=20, right=SPACE_RIGHT_BUTTOM))
         self.off_buttom = arcade.gui.UIFlatButton(text="Выключить", width=WIDTH_BUTTOM)
         self.g_box.add(self.off_buttom.with_space_around(bottom=20, right=SPACE_RIGHT_BUTTOM))
-        self.watering_buttom = arcade.gui.UIFlatButton(text="Полить", width=WIDTH_BUTTOM)
-        self.g_box.add(self.watering_buttom.with_space_around(bottom=20, right=SPACE_RIGHT_BUTTOM, ))
+        self.watering_1_buttom = arcade.gui.UIFlatButton(text="Полить", width=WIDTH_BUTTOM)
+        self.g_box.add(self.watering_1_buttom.with_space_around(bottom=20, right=SPACE_RIGHT_BUTTOM, ))
 
-        ############ LEVEL ###############
-
-        self.timer_text = arcade.Text(
-            text="00:00:00",
-            start_x=BUTTOM_ON_X + 50,
-            start_y=BUTTOM_ON_Y - 12,
-            color=arcade.color.ARSENIC,
-            font_size=25,
-            anchor_x="left",
-        )
-        self.humidity_text = arcade.Text(
-            text="",
-            start_x=LEVEL_X + 60,
-            start_y=LEVEL_Y,
-            color=arcade.color.YELLOW_ORANGE,
-            font_size=20,
-            anchor_x="right",
-            multiline=True,
-            width=100
-        )
-        self.volume_text = arcade.Text(
-            text="",
-            start_x=LEVEL_X + 60,
-            start_y=LEVEL_Y - 212,
-            color=arcade.color.RED,
-            font_size=20,
-            anchor_x="right",
-            multiline=True,
-            width=100
-        )
 
         ############ SPRITE ##############
+        self.flowers = []
+        self.flowers.append(arcade.Sprite('img/plants.png', 0.35))
+        self.flowers[0].center_x = IRRIGATOR_X - 210
+        self.flowers[0].center_y = IRRIGATOR_Y - 70
 
-        self.flower = arcade.Sprite('img/plants.png', 0.35)
-        self.flower.center_x = IRRIGATOR_X - 143
-        self.flower.center_y = IRRIGATOR_Y - 70
+        self.flowers.append(arcade.Sprite('img/flower2.png', 0.35))
+        self.flowers[1].center_x = IRRIGATOR_X - 20
+        self.flowers[1].center_y = IRRIGATOR_Y - 70
 
-        self.irrigator = arcade.Sprite('img/irrigator.png', 0.5)
+        self.irrigator = arcade.Sprite('img/irrigator2.png', 0.5)
         self.irrigator.center_x = IRRIGATOR_X
         self.irrigator.center_y = IRRIGATOR_Y
 
@@ -124,39 +96,107 @@ class WateringPlantWindow(arcade.Window):
         self.switch_off.center_x = BUTTOM_ON_X
         self.switch_off.center_y = BUTTOM_ON_Y
 
-        self.watering = arcade.Sprite('img/watering.png', 0.1)
-        self.setupWateringParam(0, 0, 0)
+        self.watering = []
+        self.watering.append(arcade.Sprite('img/watering.png', 0.1))
+        self.watering.append(arcade.Sprite('img/watering.png', 0.1))
+        self.setupWateringParam(alpha=255, change_y=0, duration=0)
 
         self.error = arcade.Sprite('img/error.png', 0.2)
         self.error.alpha = 0
-        self.error.center_x = IRRIGATOR_X + 128
+        self.error.center_x = IRRIGATOR_X + 205
         self.error.center_y = IRRIGATOR_Y - 65
 
         self.noWater = arcade.Sprite('img/noWater.png', 0.2)
         self.noWater.alpha = 0
-        self.noWater.center_x = IRRIGATOR_X + 130
+        self.noWater.center_x = IRRIGATOR_X + 205
         self.noWater.center_y = IRRIGATOR_Y - 65
+
+        ############ LEVEL ###############
+
+        self.timer_text = arcade.Text(
+            text="00:00:00",
+            start_x=LEVEL_X,
+            start_y=LEVEL_Y,
+            color=arcade.color.ARSENIC,
+            font_size=25,
+            anchor_x="left",
+        )
+
+        self.label = arcade.Text(
+            text="",
+            start_x=BUTTOM_ON_X + 370,
+            start_y=LEVEL_Y,
+            color=arcade.color.ARSENIC,
+            font_size=19,
+            anchor_x="right",
+        )
+        
+        self.humidity_text = []
+        
+        self.humidity_text.append(arcade.Text(
+            text="",
+            start_x=self.flowers[0].center_x + 75,
+            start_y=self.flowers[0].center_y + 250,
+            color=arcade.color.YELLOW_ORANGE,
+            font_size=20,
+            anchor_x="right",
+            multiline=True,
+            width=100
+        ))
+
+        self.humidity_text.append(arcade.Text(
+            text="",
+            start_x=self.flowers[1].center_x + 75,
+            start_y=self.flowers[1].center_y + 250,
+            color=arcade.color.YELLOW_ORANGE,
+            font_size=20,
+            anchor_x="right",
+            multiline=True,
+            width=100
+        ))
+        
+        self.volume_text = arcade.Text(
+            text="",
+            start_x=LEVEL_X + 60,
+            start_y=LEVEL_Y - 52,
+            color=arcade.color.RED,
+            font_size=20,
+            anchor_x="right",
+            multiline=True,
+            width=100
+        )
+
 
         ############ BUTTOM_FUNC ##############
         self.on_buttom.on_click = self.on_click_on
         self.off_buttom.on_click = self.on_click_off
-        self.watering_buttom.on_click = self.on_click_watering
+        self.watering_1_buttom.on_click = self.on_click_watering
 
         self.managerNeedButton.add(
             arcade.gui.UIAnchorWidget(
                 anchor_x="left",
                 anchor_y="bottom",
-                align_x=45,
+                align_x=90,
                 align_y=20,
                 child=self.g_box)
         )
 
-    def setupWateringParam(self, alpha, change_y, duration):
-        self.watering.center_x = self.flower.center_x
-        self.watering.center_y = self.flower.center_y + 120
-        self.watering.alpha = alpha
-        self.watering.change_y = change_y
-        self.durationWatering = duration
+    def setupWateringParam(self, alpha, change_y, duration, number = -1):
+        if number >= 0:
+            self.watering[number].center_x = self.flowers[number].center_x
+            self.watering[number].center_y = self.flowers[number].center_y + 120
+            self.watering[number].alpha = alpha
+            self.watering[number].change_y = change_y
+            self.durationWatering[number] = duration
+        else:
+            i = 0
+            for watering, flower in zip(self.watering, self.flowers):
+                watering.center_x = flower.center_x
+                watering.center_y = flower.center_y + 120
+                watering.alpha = alpha
+                watering.change_y = change_y
+                self.durationWatering[i] = duration
+                i += 1
 
     def setupOnOffSprite(self, filename):
         self.switch_off = arcade.Sprite(filename, 0.1)
@@ -200,20 +240,30 @@ class WateringPlantWindow(arcade.Window):
             self.stateError()
         self.isHappened = False
 
-
     """
     Состояние Полив
     """
-    def stateWatering(self, levelWatering):
+    def stateWatering(self, levelWatering, numberFlower = -1):
         self.currentState = StateEnum.Watering
         print('Current state: {}'.format(self.currentState.name))
-        mlToAdd = self.humidity.howMlNeedToGoodHumidity(levelWatering)
-        waterToPlants = self.volume.giveWater(mlToAdd)
-        self.setupWateringParam(255, _SPEED_CHANGE_Y, duration=waterToPlants//100)
-        curHumidity = self.humidity.addHumedity(waterToPlants)
-        if waterToPlants < mlToAdd or self.errorState.isError():
-            self.isHappened = True
-        return curHumidity
+        waterToPlants = 0
+        if numberFlower >= 0:
+            mlToAdd = self.humidity[numberFlower].howMlNeedToGoodHumidity(levelWatering)
+            waterToPlants = self.volume.giveWater(mlToAdd)
+            self.setupWateringParam(alpha=255, change_y=_SPEED_CHANGE_Y, duration=waterToPlants/100, number=numberFlower)
+            self.humidity[numberFlower].addHumedity(waterToPlants)
+            if waterToPlants < mlToAdd or self.errorState.isError():
+                self.isHappened = True
+        else:
+            for i, humidity in enumerate(self.humidity):
+                mlToAdd = humidity.howMlNeedToGoodHumidity(levelWatering)
+                waterToPlants = self.volume.giveWater(mlToAdd)
+                self.setupWateringParam(alpha=255, change_y=_SPEED_CHANGE_Y, duration=waterToPlants/100, number=i)
+                humidity.addHumedity(waterToPlants)
+                if waterToPlants < mlToAdd:
+                    self.isHappened = True
+            if self.errorState.isError():
+                self.isHappened = True
     
     """
     Состояние Ожидание
@@ -223,18 +273,22 @@ class WateringPlantWindow(arcade.Window):
             self.stateWatering(_HUMIDITY_LEVEL_MAX)
         if nowState != StateEnum.Wait:
             self.stateCheckSystem()
-        
-        curHumidity = self.humidity.checkLevelHumedity(self.total_time)
+        curHumidityList = [0.0] * len(self.humidity)
+        for i, humidity in enumerate(self.humidity):
+            curHumidityList[i] = humidity.checkLevelHumedity(self.total_time)
         if self.currentState != StateEnum.NoWater and self.currentState != StateEnum.Error:
             self.currentState = StateEnum.Wait
             print('Current state: {}'.format(self.currentState.name))
-            if curHumidity < _HUMIDITY_LEVEL_LOW or self.timing.checkTimeToWatering(self.total_time):
-                self.stateWatering(_HUMIDITY_LEVEL_OPTIMAL)
-                curHumidity = self.humidity.checkLevelHumedity(self.total_time)
-                self.stateCheckSystem()
-                if self.currentState != StateEnum.NoWater and self.currentState != StateEnum.Error:
-                    self.currentState = StateEnum.Wait
-        return curHumidity
+            i = -1
+            for curHumidity, humidity in zip(curHumidityList, self.humidity):
+                i = i + 1
+                if curHumidity < _HUMIDITY_LEVEL_LOW or (self.timing.checkTimeToWatering(self.total_time, isDone=(i + 1 == len(self.humidity))) and curHumidity < _HUMIDITY_LEVEL_OPTIMAL):
+                    self.stateWatering(_HUMIDITY_LEVEL_OPTIMAL, i)
+                    curHumidityList[i] = humidity.checkLevelHumedity(self.total_time)
+                    self.stateCheckSystem()
+                    if self.currentState != StateEnum.NoWater and self.currentState != StateEnum.Error:
+                        self.currentState = StateEnum.Wait
+        return curHumidityList
     """
     Состояние вкл/выкл
     """
@@ -243,7 +297,9 @@ class WateringPlantWindow(arcade.Window):
             self.setupOnOffSprite('img/on.png')
             self.currentState = StateEnum.On
             print('Current state: {}'.format(self.currentState.name))
-            self.textColor(int(self.humidity.checkLevelHumedity(self.total_time)), self.volume.getCurrentVolume())
+            for i, humidity in enumerate(self.humidity):
+                self.textColor(int(humidity.checkLevelHumedity(self.total_time)), self.volume.getCurrentVolume(), i)
+            self.label.text = "Уровень влажности"
             self.stateWait(StateEnum.On)
 
     def on_click_off(self, event):
@@ -253,8 +309,10 @@ class WateringPlantWindow(arcade.Window):
             self.setupWateringParam(0, 0, 0)
             self.noWater.alpha = 0
             self.error.alpha = 0
-            self.humidity_text.text = ""
+            for text in self.humidity_text:
+                text.text = ""
             self.volume_text.text = ""
+            self.label.text = ""
             # self.textColor(int(self.humidity.checkLevelHumedity(self.total_time)), self.volume.getCurrentVolume())
             print('Current state: {}'.format(self.currentState.name))
 
@@ -285,13 +343,17 @@ class WateringPlantWindow(arcade.Window):
     def on_draw(self):
         self.clear()
         self.ground.draw()
-        self.flower.draw()
+        for flower in self.flowers:
+            flower.draw()
         self.irrigator.draw()
         self.switch_off.draw()
         self.timer_text.draw()
-        self.humidity_text.draw()
+        self.label.draw()
+        for text in self.humidity_text:
+            text.draw()
         self.volume_text.draw()
-        self.watering.draw()
+        for watering in self.watering:
+            watering.draw()
         self.error.draw()
         self.noWater.draw()
         if self.currentState == StateEnum.NoWater and not self.isAddNoWaterButton:
@@ -320,47 +382,73 @@ class WateringPlantWindow(arcade.Window):
 
         # self.managerNoWater.draw()
 
-    def textColor(self, humidity, volume):
+    def textColor(self, humidity, volume, number = 0):
         color = None
         if humidity <= _HUMIDITY_LEVEL_LOW:
             color = arcade.color.RED
         elif humidity < _HUMIDITY_LEVEL_OPTIMAL:
             color = arcade.color.YELLOW_ORANGE
         elif humidity >= _HUMIDITY_LEVEL_OPTIMAL:
-            color = arcade.color.GREEN
-        self.humidity_text.text = f"Уровень влажности почвы: {humidity}%"
-        self.humidity_text.color = color
+            color = arcade.color.KELLY_GREEN
+        self.humidity_text[number].text = f"{humidity}%"
+        self.humidity_text[number].color = color
 
         if volume <= _VOLUME_LOW:
             color = arcade.color.RED
         elif volume < _VOLUME_HIGH:
             color = arcade.color.YELLOW_ORANGE
         elif volume >= _VOLUME_HIGH:
-            color = arcade.color.GREEN
+            color = arcade.color.KELLY_GREEN
         self.volume_text.text = f"Заполненность водного резервуара: {volume} ml"
         self.volume_text.color = color
 
     def update(self, delta_time: float):
         self.switch_off.update()
-        self.watering.update()
+        for watering in self.watering:
+            watering.update()
         self.noWater.update()
         self.error.update()
         self.total_time += delta_time * COEFFICIENT_TIME
         td = timedelta(seconds=self.total_time)
         x = str(td).split('.')
         self.timer_text.text = f"{x[0]}"
-        if self.durationWatering > 0:
-            self.durationWatering -= delta_time * (COEFFICIENT_TIME / 2)
-            if self.watering.center_y < 255:
-                self.setupWateringParam(255, _SPEED_CHANGE_Y, self.durationWatering)
-        else:
-            self.setupWateringParam(0, 0, 0)
+
+
+
+
+        for i, duration in enumerate(self.durationWatering):
+            if duration > 0:
+                self.durationWatering[i] -= delta_time * (COEFFICIENT_TIME / 2)
+                if self.watering[i].center_y < 255:
+                    self.setupWateringParam(alpha=255, change_y=_SPEED_CHANGE_Y, duration=self.durationWatering[i], number=i)
+            else:                
+                self.setupWateringParam(alpha=0, change_y=0, duration=0, number=i)
+
+
+
+        # if self.durationWatering[0] > 0:
+        #     self.durationWatering[0] -= delta_time * (COEFFICIENT_TIME / 2)
+        #     if self.watering[0].center_y < 255:
+        #         self.setupWateringParam(alpha=255, change_y=_SPEED_CHANGE_Y, duration=self.durationWatering[0], number=0)
+        # else:
+        #     self.setupWateringParam(alpha=0, change_y=0, duration=0, number=0)
+
+        # if self.durationWatering[1] > 0:
+        #     self.durationWatering[1] -= delta_time * (COEFFICIENT_TIME / 2)
+        #     print(self.durationWatering[1])
+        #     if self.watering[1].center_y < 255:
+        #         self.setupWateringParam(alpha=255, change_y=_SPEED_CHANGE_Y, duration=self.durationWatering[1], number=1)
+        # else:
+        #     self.setupWateringParam(alpha=0, change_y=0, duration=0, number=1)
+
         if self.total_time - self.prev_time > _WAIT_TIME and self.currentState == StateEnum.Wait:
-            curHumididty = self.stateWait()
-            self.textColor(int(curHumididty), self.volume.getCurrentVolume())
+            curHumidity = self.stateWait()
+            for i, humidity in enumerate(curHumidity):
+                self.textColor(int(humidity), self.volume.getCurrentVolume(), i)
             self.prev_time = self.total_time
         elif self.total_time - self.prev_time > _WAIT_TIME and (self.currentState == StateEnum.Error or self.currentState == StateEnum.NoWater):
-            self.textColor(int(self.humidity.checkLevelHumedity(self.total_time)), self.volume.getCurrentVolume())
+            for i, humidity in enumerate(self.humidity):
+                self.textColor(int(humidity.checkLevelHumedity(self.total_time)), self.volume.getCurrentVolume(), i)
             self.prev_time = self.total_time
 
 
