@@ -1,30 +1,35 @@
+import math
 _HUMIDITY_LEVEL_MAX = 100
 _HUMIDITY_LEVEL_MIN = 0
-_HUMIDITY_LEVEL_MIDDLE = 50
-_HUMIDITY_LEVEL_HIGH = 30
-_PROCENT = 1
-_SEC_PER_MINUTE = 20
-_ADD_HUMIDITY = 7
-_ADD_ML = 100
-_COEFFICIENT_PROCENT_PER_ML = _ADD_HUMIDITY / _ADD_ML
-_COEFFICIENT_VAPORIZE = _PROCENT / _SEC_PER_MINUTE
 
 class Humidity():
-    __currentLevelHumidity = 50.0
+    __currentLevelHumidity = 0.0
     __prevTime = 0
-    def __init__(self, prevTime, curHumedity = 50) -> None:
+    COEFFICIENT_PROCENT_PER_ML = 0.0
+    COEFFICIENT_VAPORIZE = 0.0
+    ADD_HUMIDITY = 0.0
+    ADD_ML = 0.0
+    def __init__(self, prevTime, curHumedity = 50, procent = 1, seconds = 5, humidity = 7, ml = 100) -> None:
         self.__prevTime = prevTime
         self.__currentLevelHumidity = curHumedity
+        self.COEFFICIENT_VAPORIZE = procent / seconds
+        self.COEFFICIENT_PROCENT_PER_ML = humidity / ml
+        self.ADD_HUMIDITY = humidity
+        self.ADD_ML = ml
+        
 
     """
     На вход: текущее время
     Выход: текущий уровень влажности 
     """
     def checkLevelHumedity(self, curTime: int):
-        self.__currentLevelHumidity -= _COEFFICIENT_VAPORIZE * (curTime - self.__prevTime)
+        temp = self.__currentLevelHumidity - self.COEFFICIENT_VAPORIZE * (curTime - self.__prevTime)
+        # self.__currentLevelHumidity -= self.COEFFICIENT_VAPORIZE * (curTime - self.__prevTime)
         self.__prevTime = curTime
-        if self.__currentLevelHumidity < _HUMIDITY_LEVEL_MIN:
+        if temp < _HUMIDITY_LEVEL_MIN:
             self.__currentLevelHumidity = _HUMIDITY_LEVEL_MIN
+        else:
+            self.__currentLevelHumidity = temp
         return self.__currentLevelHumidity
     
     """
@@ -32,9 +37,13 @@ class Humidity():
     Выход: текущий уровень влажности 
     """
     def addHumedity(self, mlToAdd: int):
-        self.__currentLevelHumidity += _COEFFICIENT_PROCENT_PER_ML * mlToAdd
-        if self.__currentLevelHumidity >= _HUMIDITY_LEVEL_MAX:
+        temp = math.ceil(self.__currentLevelHumidity + self.COEFFICIENT_PROCENT_PER_ML * mlToAdd)
+        # self.__currentLevelHumidity += _  COEFFICIENT_PROCENT_PER_ML * mlToAdd
+        # if self.__currentLevelHumidity >= _HUMIDITY_LEVEL_MAX:
+        if temp >= _HUMIDITY_LEVEL_MAX:
             self.__currentLevelHumidity = _HUMIDITY_LEVEL_MAX
+        else:
+            self.__currentLevelHumidity = temp
         return self.__currentLevelHumidity
     
     """
@@ -42,7 +51,7 @@ class Humidity():
     На выходе: сколько ml жидкости нужно добавить до требуемого уровня
     """
     def howMlNeedToGoodHumidity(self, needLevelHumidity: int):
-        return int((needLevelHumidity - self.__currentLevelHumidity) * _ADD_ML / _ADD_HUMIDITY)
+        return int((needLevelHumidity - self.__currentLevelHumidity) * self.ADD_ML / self.ADD_HUMIDITY)
     
     def getCurrentHumidity(self):
         return self.__currentLevelHumidity
